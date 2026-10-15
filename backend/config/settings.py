@@ -4,11 +4,9 @@ Supports development, testing, staging, and production environments.
 """
 
 import os
-import socket
 import sys
 from pathlib import Path
 from datetime import timedelta
-from urllib.parse import urlparse
 
 import environ
 from django.core.exceptions import ImproperlyConfigured
@@ -245,33 +243,26 @@ CORS_ALLOWED_ORIGINS = list(dict.fromkeys(list(CORS_ALLOWED_ORIGINS) + list(ADMI
 
 # Cache (also stores the login / OTP rate-limit counters)
 REDIS_URL = env('REDIS_URL', default='redis://localhost:6379/3')
+# While developing (DEBUG=True) a simple in-memory cache is used, so no Redis is needed on your computer.
+# On a live site Redis is used. Set USE_REDIS_CACHE=True to use Redis while developing too.
+USE_REDIS_CACHE = env.bool('USE_REDIS_CACHE', default=not DEBUG)
 
-
-def _redis_reachable(url):
-    try:
-        u = urlparse(url)
-        socket.create_connection((u.hostname or 'localhost', u.port or 6379), timeout=0.3).close()
-        return True
-    except OSError:
-        return False
-
-
-if DEBUG and not env.bool('FORCE_REDIS_CACHE', default=False) and not _redis_reachable(REDIS_URL):
-    # Development convenience: no Redis running -> use memory instead of crashing.
-    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
-else:
+if USE_REDIS_CACHE:
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': REDIS_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'CONNECTION_POOL_KWARGS': {'max_connections': 50},
+                # protocol 2 works with every Redis server, old Windows builds included (newer clients default to 3)
+                'CONNECTION_POOL_KWARGS': {'max_connections': 50, 'protocol': 2},
                 # A short Redis outage must not take the whole shop down
                 'IGNORE_EXCEPTIONS': True,
             },
         }
     }
+else:
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
 
 # Session Configuration (cached_db keeps admin logins even if the cache is flushed)
