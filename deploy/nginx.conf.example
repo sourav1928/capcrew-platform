@@ -1,0 +1,128 @@
+# =====================================================================
+#  CapCrew on nginx. Replace "yourshop.com" with your real domain everywhere,
+#  then save as /etc/nginx/sites-available/capcrew and enable it.
+#  Get ONE free HTTPS certificate for all four addresses (before enabling this file), with nginx stopped:
+#     sudo certbot certonly --standalone -d yourshop.com -d www.yourshop.com -d admin.yourshop.com -d api.yourshop.com
+#  Paths assume the project lives in /srv/capcrew and the built websites in /var/www/capcrew.
+# =====================================================================
+
+# Slows down password guessing / code spamming at the server door (the Django app has its own limits too)
+limit_req_zone $binary_remote_addr zone=capcrew_auth:10m rate=30r/m;
+
+# ---------------------------------------------------------------------
+#  1. The API  (https://api.yourshop.com)
+# ---------------------------------------------------------------------
+server {
+    listen 80;
+    server_name api.yourshop.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.yourshop.com;
+    ssl_certificate     /etc/letsencrypt/live/yourshop.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourshop.com/privkey.pem;
+    include /etc/nginx/snippets/capcrew-security-headers.conf;
+
+    server_tokens off;
+    client_max_body_size 6m;            # product photos are limited to 5 MB
+
+    # Uploaded product photos. Treated as plain images only: nothing in here can ever run as a script.
+    location /media/ {
+        alias /srv/capcrew/media/;
+        include /etc/nginx/snippets/capcrew-security-headers.conf;
+        add_header Content-Security-Policy "default-src 'none'; img-src 'self'; sandbox" always;
+        expires 30d;
+    }
+
+    # Login / sign-up / email-code endpoints get an extra speed limit
+    location /api/v1/auth/ {
+        limit_req zone=capcrew_auth burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8001;
+        include /etc/nginx/snippets/capcrew-proxy.conf;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8001;
+        include /etc/nginx/snippets/capcrew-proxy.conf;
+    }
+}
+
+# ---------------------------------------------------------------------
+#  2. The shop  (https://yourshop.com)
+# ---------------------------------------------------------------------
+server {
+    listen 80;
+    server_name yourshop.com www.yourshop.com;
+    return 301 https://yourshop.com$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name yourshop.com www.yourshop.com;
+    ssl_certificate     /etc/letsencrypt/live/yourshop.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourshop.com/privkey.pem;
+    include /etc/nginx/snippets/capcrew-security-headers.conf;
+
+    server_tokens off;
+    root /var/www/capcrew/shop;          # the contents of frontend/dist after "npm run build"
+    index index.html;
+
+    # The Content-Security-Policy: only YOUR files, your API and Razorpay's payment window may run or load.
+    # (If you add analytics, chat widgets or fonts from other sites, add their addresses here.)
+    set $csp "default-src 'self'; script-src 'self' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.yourshop.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'";
+    add_header Content-Security-Policy $csp always;
+
+    location /assets/ {                  # file names contain a fingerprint, so they can be cached for a year
+        include /etc/nginx/snippets/capcrew-security-headers.conf;
+        add_header Content-Security-Policy $csp always;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    location / {                         # every page address is served by the same index.html (single-page app)
+        include /etc/nginx/snippets/capcrew-security-headers.conf;
+        add_header Content-Security-Policy $csp always;
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+}
+
+# ---------------------------------------------------------------------
+#  3. The admin site  (https://admin.yourshop.com)  - only you should use this
+# ---------------------------------------------------------------------
+server {
+    listen 80;
+    server_name admin.yourshop.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name admin.yourshop.com;
+    ssl_certificate     /etc/letsencrypt/live/yourshop.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourshop.com/privkey.pem;
+    include /etc/nginx/snippets/capcrew-security-headers.conf;
+
+    server_tokens off;
+    root /var/www/capcrew/admin;         # the contents of frontend/dist-admin after "npm run build:admin"
+    index index.html;
+
+    # Strongly recommended: only let YOUR internet address reach the admin. Uncomment and put your IP:
+    # allow 203.0.113.10;
+    # deny all;
+
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.yourshop.com; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'";
+    add_header Content-Security-Policy $csp always;
+
+    location / {
+        include /etc/nginx/snippets/capcrew-security-headers.conf;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header Content-Security-Policy $csp always;
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+}

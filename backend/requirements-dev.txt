@@ -1,0 +1,6 @@
+# Extra tools for developers only. Not needed on the live server.
+-r requirements.txt
+coverage
+black
+isort
+flake8

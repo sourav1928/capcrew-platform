@@ -1,0 +1,35 @@
+# ---- secrets: NEVER commit these ----
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+!.env.example.admin
+!**/.env.example.admin
+!.env.production.example
+!**/.env.production.example
+
+# ---- generated / installed ----
+venv/
+.venv/
+node_modules/
+dist/
+dist-admin/
+staticfiles/
+__pycache__/
+*.pyc
+*.sqlite3
+
+# ---- your data ----
+media/
+logs/
+*.log
+*.sql
+*.dump
+
+# ---- editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

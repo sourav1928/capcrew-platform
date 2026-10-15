@@ -1,0 +1,39 @@
+# CapCrew backend: everything the website needs to RUN. Versions are pinned and were tested together.
+# (Tools for developers are in requirements-dev.txt.) Tested with Django 5.2 LTS on Python 3.12.
+# Update regularly and re-run the tests: python manage.py test
+
+# Web framework
+Django==5.2.18
+djangorestframework==3.18.3
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+django-filter==26.2
+django-environ==0.14.0
+drf-spectacular==0.30.0
+
+# Database and cache
+psycopg2-binary==2.9.13
+django-redis==7.0.0
+redis==8.1.0
+
+# Background jobs (stock reservations, shipment sync, refunds)
+celery==5.6.3
+django-celery-beat==2.9.0
+django-celery-results==2.6.0
+
+# Images, files and static files
+Pillow==12.3.0
+django-storages==1.14.6
+boto3==1.43.111
+whitenoise==6.12.0
+
+# Payments, email and HTTP
+razorpay==2.0.1
+requests==2.34.2
+
+# Logging and monitoring
+python-json-logger==4.2.0
+sentry-sdk==2.71.0
+
+# Production web server
+gunicorn==26.2.0

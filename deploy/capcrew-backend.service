@@ -1,0 +1,20 @@
+# /etc/systemd/system/capcrew-backend.service
+# Keeps the backend running, and restarts it if it crashes or the server reboots.
+#   sudo systemctl daemon-reload && sudo systemctl enable --now capcrew-backend
+[Unit]
+Description=CapCrew backend (gunicorn)
+After=network.target postgresql.service redis-server.service
+
+[Service]
+User=capcrew
+Group=capcrew
+WorkingDirectory=/srv/capcrew/backend
+ExecStart=/srv/capcrew/backend/venv/bin/gunicorn config.wsgi:application \
+    --bind 127.0.0.1:8001 --workers 3 --timeout 30 --access-logfile - --error-logfile -
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+#!/bin/bash
+# Pre-commit hook for backend code quality
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Format with black
+echo "Formatting with black..."
+black . --exclude='/(\.git|\.hg|\.mypy_cache|\.tox|\.venv|_build|buck-out|build|dist|migrations)/'
+
+# Sort imports
+echo "Sorting imports with isort..."
+isort . --skip-glob='*/migrations/*'
+
+# Lint with flake8
+echo "Running flake8..."
+flake8 . --exclude=migrations
+
+# Type check with mypy
+echo "Running mypy..."
+mypy . --ignore-missing-imports || true
+
+echo "✅ Pre-commit checks passed!"
