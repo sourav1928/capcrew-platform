@@ -131,6 +131,33 @@ Back up the database every night (and copy the file somewhere off the server):
 
 Also back up `/srv/capcrew/media` (product photos) and your `backend/.env`.
 
+## Product photos on hosts that erase their disk (Render, Heroku...)
+
+If you host on a normal server (VPS) with a permanent disk, skip this. On Render's free and most other managed plans,
+files saved to the server's disk **disappear on every restart**, so photos must be stored elsewhere. Supabase Storage
+works well, and you may already have a Supabase project for the database.
+
+1. Supabase -> **Storage** -> **New bucket**. Name it `media` and switch **Public bucket** ON.
+2. Supabase -> **Project Settings** -> **Storage** -> **S3 Connection**. Copy the **Endpoint** and the **Region**,
+   then click **New access key** and copy the **Access key ID** and the **Secret** (it is shown only once).
+3. Find your project reference (Project Settings -> General -> Reference ID; it is also the part after `postgres.` in the database user name).
+4. On Render (backend service -> Environment) add:
+
+   | Variable | Value |
+   |---|---|
+   | `USE_S3` | `True` |
+   | `AWS_STORAGE_BUCKET_NAME` | `media` |
+   | `AWS_S3_ENDPOINT_URL` | the Endpoint from step 2 |
+   | `AWS_S3_REGION_NAME` | the Region from step 2 |
+   | `AWS_ACCESS_KEY_ID` | the Access key ID |
+   | `AWS_SECRET_ACCESS_KEY` | the Secret |
+   | `AWS_S3_CUSTOM_DOMAIN` | `<project-ref>.supabase.co/storage/v1/object/public/media` (no `https://`) |
+
+5. Redeploy, then upload a product photo in the admin. Photos uploaded **before** this change are gone and must be uploaded again.
+6. Test: open the photo's address in a new browser tab. It must show the image, not an error.
+
+Other S3-compatible services (Cloudflare R2, Amazon S3, Backblaze B2) use the same variables.
+
 ## 8. Razorpay (online payments)
 
 1. Put the **live** key id and secret in `backend/.env` and keep `PAYMENT_PROVIDER=razorpay`.

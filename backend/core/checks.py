@@ -54,4 +54,9 @@ def live_site_recommendations(app_configs, **kwargs):
         notes.append(Warning('NUM_PROXIES is 0.',
                              hint='Behind nginx set NUM_PROXIES=1, otherwise every visitor looks like the same IP address to the rate limiter.',
                              id='capcrew.W006'))
+    if 'FileSystemStorage' in settings.STORAGES.get('default', {}).get('BACKEND', ''):
+        notes.append(Warning('Uploaded product photos are saved on this server\'s own disk.',
+                             hint='On hosts such as Render the disk is erased on every restart, so photos vanish. '
+                                  'Set USE_S3=True and the AWS_* variables (see deploy/DEPLOYMENT.md). '
+                                  'Ignore this only on a server with a permanent disk.', id='capcrew.W007'))
     return notes

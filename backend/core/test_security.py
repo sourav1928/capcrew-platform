@@ -159,3 +159,13 @@ class StartupSafetyCheckTests(TestCase):
     def test_deploy_check_nags_about_default_admin_address_and_localhost_settings(self):
         ids = {w.id for w in live_site_recommendations(None)}
         self.assertTrue({'capcrew.W001', 'capcrew.W002', 'capcrew.W003', 'capcrew.W005'} <= ids)
+
+    @override_settings(STORAGES={'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+                                 'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+    def test_deploy_check_warns_when_photos_would_live_on_a_disk_that_may_be_wiped(self):
+        self.assertIn('capcrew.W007', {w.id for w in live_site_recommendations(None)})
+
+    @override_settings(STORAGES={'default': {'BACKEND': 'storages.backends.s3.S3Storage'},
+                                 'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+    def test_no_photo_warning_when_s3_storage_is_used(self):
+        self.assertNotIn('capcrew.W007', {w.id for w in live_site_recommendations(None)})

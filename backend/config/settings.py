@@ -154,23 +154,34 @@ STATIC_ROOT = ROOT_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = ROOT_DIR / 'media'
 
-# Storage (S3 or local)
-if env.bool('USE_S3', default=False):
+# Storage for uploaded product photos.
+# Local disk is fine on your own computer or a VPS with a permanent disk. On hosts like Render the disk is erased on
+# every restart, so photos must live in S3-compatible storage (Supabase Storage, Cloudflare R2, AWS S3...).
+USE_S3 = env.bool('USE_S3', default=False)
+if USE_S3:
+    _s3_endpoint = env('AWS_S3_ENDPOINT_URL', default='') or None
     STORAGES = {
         'default': {
-            'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+            'BACKEND': 'storages.backends.s3.S3Storage',
             'OPTIONS': {
                 'bucket_name': env('AWS_STORAGE_BUCKET_NAME'),
+                'access_key': env('AWS_ACCESS_KEY_ID'),
+                'secret_key': env('AWS_SECRET_ACCESS_KEY'),
                 'region_name': env('AWS_S3_REGION_NAME', default='us-east-1'),
+                'endpoint_url': _s3_endpoint,
+                # The public address photos are shown from, e.g.
+                #   <project-ref>.supabase.co/storage/v1/object/public/<bucket>     (Supabase, no https://)
+                'custom_domain': env('AWS_S3_CUSTOM_DOMAIN', default='') or False,
+                'addressing_style': env('AWS_S3_ADDRESSING_STYLE', default='path' if _s3_endpoint else 'auto'),
+                'signature_version': 's3v4',
+                'querystring_auth': env.bool('AWS_QUERYSTRING_AUTH', default=False),  # plain, never-expiring public links
+                'default_acl': None,
+                'file_overwrite': False,
+                'object_parameters': {'CacheControl': 'public, max-age=31536000'},
             },
         },
-        'staticfiles': {
-            'BACKEND': 'storages.backends.s3boto3.S3StaticStorage',
-            'OPTIONS': {
-                'bucket_name': env('AWS_STORAGE_BUCKET_NAME'),
-                'region_name': env('AWS_S3_REGION_NAME', default='us-east-1'),
-            },
-        },
+        # Static files (admin CSS...) are always served by WhiteNoise from the app itself
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
     }
 else:
     STORAGES = {
@@ -345,7 +356,7 @@ LOGGING = {
             'style': '{',
         },
         'json': {
-            '()': 'pythonjsonlogger.json.JsonFormatter',
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
             'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
         },
     },
