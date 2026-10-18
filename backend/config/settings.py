@@ -160,6 +160,7 @@ MEDIA_ROOT = ROOT_DIR / 'media'
 USE_S3 = env.bool('USE_S3', default=False)
 if USE_S3:
     _s3_endpoint = env('AWS_S3_ENDPOINT_URL', default='') or None
+    from botocore.config import Config as _BotoConfig
     STORAGES = {
         'default': {
             'BACKEND': 'storages.backends.s3.S3Storage',
@@ -178,6 +179,10 @@ if USE_S3:
                 'default_acl': None,
                 'file_overwrite': False,
                 'object_parameters': {'CacheControl': 'public, max-age=31536000'},
+                # Newer boto3 adds extra checksum headers that many S3-compatible services (Supabase, R2, B2, MinIO...)
+                # reject. Only send them when the service demands it. Harmless on real Amazon S3.
+                'client_config': _BotoConfig(request_checksum_calculation='when_required',
+                                             response_checksum_validation='when_required'),
             },
         },
         # Static files (admin CSS...) are always served by WhiteNoise from the app itself

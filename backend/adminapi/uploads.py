@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.utils import timezone
@@ -64,6 +65,33 @@ def compress_image(data, ext):
         return data, ext
 
 
+def describe_storage_error(exc):
+    """A one-line, secret-free description of a storage failure for the logs (status, code, bucket, endpoint)."""
+    bits = [type(exc).__name__]
+    response = getattr(exc, 'response', None)
+    if isinstance(response, dict):
+        meta, err = response.get('ResponseMetadata') or {}, response.get('Error') or {}
+        if meta.get('HTTPStatusCode'):
+            bits.append(f"http={meta['HTTPStatusCode']}")
+        for key in ('Code', 'Message'):
+            if err.get(key):
+                bits.append(f'{key.lower()}={err[key]}')
+        headers = meta.get('HTTPHeaders') or {}
+        for name in ('server', 'content-type', 'x-amz-request-id'):
+            if headers.get(name):
+                bits.append(f'{name}={headers[name]}')
+    elif str(exc):
+        bits.append(str(exc)[:300])
+    options = (getattr(settings, 'STORAGES', {}).get('default') or {}).get('OPTIONS') or {}
+    if options.get('bucket_name'):
+        bits.append(f"bucket={options['bucket_name']}")
+    if options.get('endpoint_url'):
+        bits.append(f"endpoint={options['endpoint_url']}")
+    if options.get('region_name'):
+        bits.append(f"region={options['region_name']}")
+    return ' | '.join(bits)
+
+
 def absolute_media_url(request, path):
     url = default_storage.url(path)
     return url if url.startswith(('http://', 'https://')) else request.build_absolute_uri(url)
@@ -85,6 +113,11 @@ class ImageUploadView(APIView):
             return fail('Only JPG, PNG, WebP or GIF photos can be uploaded.')
         data, ext = compress_image(data, ext)
         now = timezone.now()
-        path = default_storage.save(f'uploads/{now:%Y/%m}/{uuid.uuid4().hex}.{ext}', ContentFile(data))
+        try:
+            path = default_storage.save(f'uploads/{now:%Y/%m}/{uuid.uuid4().hex}.{ext}', ContentFile(data))
+        except Exception as exc:
+            logger.error('Photo storage failed: %s', describe_storage_error(exc), exc_info=True)
+            return fail('The photo could not be saved to storage. Please check the storage settings '
+                        '(run "python manage.py check_storage" for details) and try again.', status=502)
         return ok({'url': absolute_media_url(request, path), 'name': os.path.basename(path), 'size': len(data)},
                   'Photo uploaded', status=201)
